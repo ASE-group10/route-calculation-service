@@ -1,43 +1,52 @@
 package nl.ase_wayfinding.routecalc.service;
 
-import nl.ase_wayfinding.routecalc.model.*;
+import nl.ase_wayfinding.routecalc.model.RouteDetails;
+import nl.ase_wayfinding.routecalc.model.RouteRequest;
+import nl.ase_wayfinding.routecalc.model.UserPreferences;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class RouteService {
 
-    public RouteDetails calculateRoute(UserPreferences preferences) {
-        // Mock implementation for calculating a route
+    private final ExternalServiceClient externalServiceClient;
+
+    public RouteService(ExternalServiceClient externalServiceClient) {
+        this.externalServiceClient = externalServiceClient;
+    }
+
+    public RouteDetails calculateRoute(RouteRequest request) {
+        UserPreferences preferences = externalServiceClient.fetchUserPreferences(request.getUserId());
+        String environmentalData = externalServiceClient.fetchEnvironmentalData();
+
         RouteDetails route = new RouteDetails();
-        route.setRouteId("R12345");
-        route.setWaypoints(new String[]{"StartPoint", "MidPoint", "EndPoint"});
+        route.setRouteId("R" + System.currentTimeMillis());
+        route.setWaypoints(request.getWaypoints());
         route.setEta("15 mins");
-        route.setCostBreakdown("Fuel: $5, Toll: $2");
+
+        if (preferences.isAvoidTraffic()) {
+            route.setEta("20 mins (avoiding traffic)");
+        }
+        if (preferences.isAvoidPollution()) {
+            route.setCostBreakdown("Eco-Friendly Route");
+        }
+
         return route;
     }
 
-    public RouteDetails getAlternativeRoute() {
-        // Mock implementation for providing an alternative route
-        RouteDetails route = new RouteDetails();
-        route.setRouteId("A67890");
-        route.setWaypoints(new String[]{"StartPoint", "ScenicPoint", "EndPoint"});
-        route.setEta("20 mins");
-        route.setCostBreakdown("Fuel: $6, Toll: $0");
-        return route;
+    public RouteDetails getAlternativeRoute(RouteRequest request) {
+        // Similar to calculateRoute but with alternative route logic
+        return new RouteDetails();
     }
 
-    public RouteDetails calculateMultiTransportRoute(UserPreferences preferences) {
-        // Mock implementation for calculating a multi-transport route
-        RouteDetails route = new RouteDetails();
-        route.setRouteId("MT112233");
-        route.setWaypoints(new String[]{"Station1", "BusStop1", "EndPoint"});
-        route.setEta("45 mins");
-        route.setCostBreakdown("Train: $10, Bus: $3");
-        return route;
+    public RouteDetails calculateMultiTransportRoute(RouteRequest request) {
+        // Logic for multi-transport route
+        return new RouteDetails();
     }
 
-    public boolean validateStop(String stopName) {
-        // Mock validation logic
-        return "ValidStop".equals(stopName);
+    public boolean validateStop(String routeId, double stopLat, double stopLng) {
+        // Mocked validation logic
+        return true;
     }
 }

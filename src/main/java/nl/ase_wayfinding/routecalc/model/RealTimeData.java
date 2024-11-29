@@ -4,7 +4,8 @@ import lombok.Data;
 
 @Data
 public class RealTimeData {
-    private String trafficStatus;   // Current traffic conditions
-    private String weatherConditions; // Weather information
-    private String eventWarnings;   // Events impacting the route
+    private String trafficStatus;
+    private String weatherConditions;
+    private String tollCosts;
+    private String co2Impact;
 }
