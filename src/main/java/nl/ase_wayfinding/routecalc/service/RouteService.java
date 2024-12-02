@@ -1,9 +1,6 @@
 package nl.ase_wayfinding.routecalc.service;
 
-import nl.ase_wayfinding.routecalc.model.RealTimeData;
-import nl.ase_wayfinding.routecalc.model.RouteDetails;
-import nl.ase_wayfinding.routecalc.model.RouteRequest;
-import nl.ase_wayfinding.routecalc.model.UserPreferences;
+import nl.ase_wayfinding.routecalc.model.*;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -19,9 +16,9 @@ public class RouteService {
     }
 
     public RouteDetails calculateRoute(RouteRequest request) {
-        UserPreferences preferences = externalServiceClient.fetchUserPreferences(request.getUserId());
+        RoutePreference preferences = externalServiceClient.fetchUserPreferences(request.getUserId());
         RealTimeData realTimeData = externalServiceClient.fetchRealTimeData();
-        String environmentalData = externalServiceClient.fetchEnvironmentalData();
+        FeatureCollection environmentalData = externalServiceClient.fetchEnvironmentalData();
 
         RouteDetails route = new RouteDetails();
         route.setRouteId("R" + System.currentTimeMillis());
@@ -30,17 +27,18 @@ public class RouteService {
         route.setCostBreakdown("Fuel: $5, Toll: $2");
 
         // Adjust ETA based on preferences and real-time data
-        if (preferences.isAvoidTraffic() && "Heavy Traffic".equals(realTimeData.getTrafficStatus())) {
-            route.setEta("20 mins (avoiding traffic)");
+//        if (preferences.getAvoidDangerousStreets() && "Heavy Traffic".equals(realTimeData.getTrafficStatus())) {
+        if (preferences.getAvoidDangerousStreets() && !realTimeData.getTrafficStatus().isEmpty()) {
+            route.setEta("20 mins (avoiding dangerous streets)");
         }
 
-        // Eco-friendly route option
-        if (preferences.isAvoidPollution() && "High Pollution".equals(environmentalData)) {
+        // Eco-friendly route adjustment
+        if (preferences.getEcoFriendly() && containsHighPollution(environmentalData)) {
             route.setCostBreakdown("Eco-Friendly Route: Fuel: $4");
         }
 
         // Adjust cost breakdown if toll avoidance is enabled
-        if (preferences.isAvoidTolls()) {
+        if (preferences.getAvoidTolls() != null && preferences.getAvoidTolls()) {
             route.setCostBreakdown("Fuel: $5, Toll: $0");
         }
 
@@ -48,7 +46,7 @@ public class RouteService {
     }
 
     public RouteDetails getAlternativeRoute(RouteRequest request) {
-        UserPreferences preferences = externalServiceClient.fetchUserPreferences(request.getUserId());
+        RoutePreference preferences = externalServiceClient.fetchUserPreferences(request.getUserId());
         RealTimeData realTimeData = externalServiceClient.fetchRealTimeData();
 
         RouteDetails alternativeRoute = new RouteDetails();
@@ -58,10 +56,10 @@ public class RouteService {
         alternativeRoute.setCostBreakdown("Fuel: $6, Toll: $0");
 
         // Adjust alternative route based on preferences
-        if (preferences.isAvoidTraffic() && "Heavy Traffic".equals(realTimeData.getTrafficStatus())) {
-            alternativeRoute.setEta("30 mins (avoiding traffic)");
+        if (preferences.getAvoidHighways() && "Heavy Traffic".equals(realTimeData.getTrafficStatus())) {
+            alternativeRoute.setEta("30 mins (avoiding highways)");
         }
-        if (preferences.isAvoidPollution()) {
+        if (preferences.getMinimizeCo2()) {
             alternativeRoute.setCostBreakdown("Eco-Friendly Route: Fuel: $5");
         }
 
@@ -91,5 +89,15 @@ public class RouteService {
         String stopCoordinate = stopLat + "," + stopLng;
 
         return waypoints.contains(stopCoordinate);
+    }
+
+    private boolean containsHighPollution(FeatureCollection environmentalData) {
+        for (Feature feature : environmentalData.getFeatures()) {
+            if (feature.getProperties().getCO2_mgm3() != null &&
+                    feature.getProperties().getCO2_mgm3() > 50.0) {
+                return true;
+            }
+        }
+        return false;
     }
 }
