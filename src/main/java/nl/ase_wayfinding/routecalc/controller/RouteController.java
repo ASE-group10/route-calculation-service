@@ -20,6 +20,9 @@ public class RouteController {
 
     @PostMapping("/calculate")
     public ResponseEntity<RouteDetails> calculateRoute(@RequestBody RouteRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Request body cannot be null");
+        }
         RouteDetails route = routeService.calculateRoute(request);
         return ResponseEntity.ok(route);
     }

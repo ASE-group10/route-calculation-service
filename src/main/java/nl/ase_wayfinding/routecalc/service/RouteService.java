@@ -91,10 +91,13 @@ public class RouteService {
         return waypoints.contains(stopCoordinate);
     }
 
-    private boolean containsHighPollution(FeatureCollection environmentalData) {
-        for (Feature feature : environmentalData.getFeatures()) {
-            if (feature.getProperties().getCO2_mgm3() != null &&
-                    feature.getProperties().getCO2_mgm3() > 50.0) {
+    public boolean containsHighPollution(FeatureCollection featureCollection) {
+        if (featureCollection == null || featureCollection.getFeatures() == null) {
+            return false;
+        }
+
+        for (Feature feature : featureCollection.getFeatures()) {
+            if (feature.getProperties() != null && feature.getProperties().getCO2_mgm3() > 50.0) {
                 return true;
             }
         }
