@@ -5,17 +5,19 @@ import nl.ase_wayfinding.routecalc.model.RouteRequest;
 import nl.ase_wayfinding.routecalc.service.RouteService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
+import org.springframework.web.client.RestTemplate;
 
 @RestController
 @RequestMapping("/route")
 public class RouteController {
 
     private final RouteService routeService;
+    private final RestTemplate restTemplate;
 
-    public RouteController(RouteService routeService) {
+
+    public RouteController(RouteService routeService, RestTemplate restTemplate) {
         this.routeService = routeService;
+        this.restTemplate = restTemplate;
     }
 
     @PostMapping("/calculate")
@@ -45,5 +47,17 @@ public class RouteController {
                                                 @RequestParam double stopLng) {
         boolean isValid = routeService.validateStop(routeId, stopLat, stopLng);
         return ResponseEntity.ok(isValid);
+    }
+    @GetMapping("/fetch-reward-data")
+    public String fetchRewardData() {
+        String rewardServiceUrl = "http://localhost:8080/hello-reward";
+        String response = restTemplate.getForObject(rewardServiceUrl, String.class);
+        return "Route Calculation Service received data: " + response;
+    }
+    @GetMapping("/retrieve-rewards")
+    public String retrieveRewards() {
+        String rewardServiceUrl = "http://localhost:8080/rewards";
+        String response = restTemplate.getForObject(rewardServiceUrl, String.class);
+        return "Route Calculation Service received rewards: " + response;
     }
 }
