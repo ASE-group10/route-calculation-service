@@ -1,63 +1,36 @@
 package nl.ase_wayfinding.routecalc.controller;
 
-import nl.ase_wayfinding.routecalc.model.RouteDetails;
-import nl.ase_wayfinding.routecalc.model.RouteRequest;
-import nl.ase_wayfinding.routecalc.service.RouteService;
-import org.springframework.http.ResponseEntity;
+import com.graphhopper.GHResponse;
+import org.routing.service.GraphHopperService;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/route")
 public class RouteController {
+    private final GraphHopperService graphHopperService;
 
-    private final RouteService routeService;
-    private final RestTemplate restTemplate;
-
-
-    public RouteController(RouteService routeService, RestTemplate restTemplate) {
-        this.routeService = routeService;
-        this.restTemplate = restTemplate;
+    public RouteController(GraphHopperService graphHopperService) {
+        this.graphHopperService = graphHopperService;
     }
 
-    @PostMapping("/calculate")
-    public ResponseEntity<RouteDetails> calculateRoute(@RequestBody RouteRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("Request body cannot be null");
+    @GetMapping
+    public String getRoute(@RequestParam double fromLat, @RequestParam double fromLon,
+                           @RequestParam double toLat, @RequestParam double toLon) {
+        GHResponse response = graphHopperService.getRoute(fromLat, fromLon, toLat, toLon);
+
+        if (response.hasErrors()) {
+            return "Error: " + response.getErrors();
         }
-        RouteDetails route = routeService.calculateRoute(request);
-        return ResponseEntity.ok(route);
-    }
 
-    @GetMapping("/alternative")
-    public ResponseEntity<RouteDetails> getAlternativeRoutes(@RequestBody RouteRequest request) {
-        RouteDetails route = routeService.getAlternativeRoute(request);
-        return ResponseEntity.ok(route);
+        return "Distance: " + response.getBest().getDistance() / 1000.0 + " km, "
+                + "Time: " + response.getBest().getTime() / 60000.0 + " minutes.";
     }
-
-    @PostMapping("/multiTransport")
-    public ResponseEntity<RouteDetails> calculateMultiTransportRoute(@RequestBody RouteRequest request) {
-        RouteDetails route = routeService.calculateMultiTransportRoute(request);
-        return ResponseEntity.ok(route);
-    }
-
-    @GetMapping("/validateStop")
-    public ResponseEntity<Boolean> validateStop(@RequestParam String routeId,
-                                                @RequestParam double stopLat,
-                                                @RequestParam double stopLng) {
-        boolean isValid = routeService.validateStop(routeId, stopLat, stopLng);
-        return ResponseEntity.ok(isValid);
-    }
-    @GetMapping("/fetch-reward-data")
-    public String fetchRewardData() {
-        String rewardServiceUrl = "http://localhost:8080/hello-reward";
-        String response = restTemplate.getForObject(rewardServiceUrl, String.class);
-        return "Route Calculation Service received data: " + response;
-    }
-    @GetMapping("/retrieve-rewards")
-    public String retrieveRewards() {
-        String rewardServiceUrl = "http://localhost:8080/rewards";
-        String response = restTemplate.getForObject(rewardServiceUrl, String.class);
-        return "Route Calculation Service received rewards: " + response;
+    // New endpoint to get all waypoints between start and end points
+    @GetMapping("/waypoints")
+    public Map<String, Object> getWaypoints(@RequestParam double fromLat, @RequestParam double fromLon,
+                                            @RequestParam double toLat, @RequestParam double toLon) {
+        return graphHopperService.getWaypoints(fromLat, fromLon, toLat, toLon);
     }
 }
