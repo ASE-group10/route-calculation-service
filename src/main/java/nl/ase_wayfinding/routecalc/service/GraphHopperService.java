@@ -1,4 +1,4 @@
-package org.routing.service;
+package nl.ase_wayfinding.routecalc.service;
 
 import com.graphhopper.GHRequest;
 import com.graphhopper.GHResponse;
