@@ -36,11 +36,10 @@ public class RouteController {
             return ResponseEntity.badRequest().body(Map.of("error", "At least two points required"));
         }
 
-        // Get mode dynamically; default to "car"
         String mode = (String) body.getOrDefault("mode", "car");
 
         if (mode.equalsIgnoreCase("bus")) {
-            Map<String, Object> busRoute = graphHopperService.getBusRoute(points);
+            Map<String, Object> busRoute = graphHopperService.getBusRouteWithWalking(points);
             return ResponseEntity.ok(busRoute);
         }
 
