@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+**/src/main/resources/data/ireland-and-northern-ireland-latest.osm.pbf
+**/src/main/resources/gtfs
+**/graph-cache
+
+.DS_Store
