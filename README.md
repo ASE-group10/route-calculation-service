@@ -11,7 +11,7 @@ GTFS data can be downloaded from the following source:
 After downloading the GTFS data, extract the contents before use.
 
 ## Where to Place the Data
-Place the downloaded and extracted GTFS data inside the `data/gtfs/` directory within the project structure:
+Place the downloaded and extracted GTFS data inside the `gtfs/` directory within the project structure:
 
 ```
 route-calculation-service/
@@ -33,5 +33,5 @@ route-calculation-service/
                 └── ireland-and-northern-ireland-latest.osm.pbf
 ```
 
-Ensure that the GTFS data is uncompressed before use. The `data/gtfs/` directory should contain `.txt` files extracted from the GTFS ZIP archive.
+Ensure that the GTFS data is uncompressed before use. The `gtfs/` directory should contain `.txt` files extracted from the GTFS ZIP archive.
 
