@@ -19,17 +19,17 @@ route-calculation-service/
     └── main/
         └── resources/
             ├── application.properties
-            └── data/
-                ├── gtfs/
-                │   ├── agency.txt
-                │   ├── calendar.txt
-                │   ├── calendar_dates.txt
-                │   ├── routes.txt
-                │   ├── shapes.txt
-                │   ├── stop_times.txt
-                │   ├── stops.txt
-                │   ├── transfers.txt
-                │   └── trips.txt
+            ├── gtfs/
+                ├── agency.txt
+                ├── calendar.txt
+                ├── calendar_dates.txt
+                ├── routes.txt
+                ├── shapes.txt
+                ├── stop_times.txt
+                ├── stops.txt
+                ├── transfers.txt
+                └── trips.txt
+            ├── data/
                 └── ireland-and-northern-ireland-latest.osm.pbf
 ```
 
