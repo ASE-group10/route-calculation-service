@@ -101,5 +101,20 @@
 				</configuration>
 			</plugin>
 		</plugins>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+				<excludes>
+					<exclude>gtfs/**</exclude>
+					<exclude>data/ireland-and-northern-ireland-latest.osm.pbf</exclude>
+				</excludes>
+			</resource>
+			<resource>
+				<directory>graph_cache</directory>
+				<excludes>
+					<exclude>**/*</exclude>
+				</excludes>
+			</resource>
+		</resources>
 	</build>
 </project>

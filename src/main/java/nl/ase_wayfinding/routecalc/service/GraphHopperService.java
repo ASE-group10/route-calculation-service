@@ -39,9 +39,21 @@ public class GraphHopperService {
 
     @PostConstruct
     public void init() {
-        String osmFile = "src/main/resources/data/ireland-and-northern-ireland-latest.osm.pbf";
-        String graphFolder = "graph-cache";
+        // Determine if we're running inside Docker based on an environment variable
+        boolean isDocker = System.getenv("RUNNING_IN_DOCKER") != null;
 
+        // Dynamically set the OSM file path using the environment variable, falling back to local path
+        String osmFile = System.getenv("OSM_FILE_PATH");
+        if (osmFile == null || osmFile.isEmpty()) {
+            osmFile = isDocker
+                    ? "/app/data/ireland-and-northern-ireland-latest.osm.pbf"
+                    : "src/main/resources/data/ireland-and-northern-ireland-latest.osm.pbf";
+        }
+
+        // Set the graph cache folder; adjust dynamically if needed
+        String graphFolder = isDocker ? "/app/graph-cache" : "graph-cache";
+
+        // Verify that the OSM file exists before initializing GraphHopper
         File osmData = new File(osmFile);
         if (!osmData.exists()) {
             throw new IllegalStateException("OSM file not found: " + osmData.getAbsolutePath());
@@ -60,20 +72,29 @@ public class GraphHopperService {
 
         this.translationMap = hopper.getTranslationMap();
 
-        loadGTFSData();
-        logger.info("✅ GraphHopper initialized with OSM data.");
+        // Dynamically set the GTFS directory using environment variable, with fallback
+        String gtfsDir = System.getenv("GTFS_PATH");
+        if (gtfsDir == null || gtfsDir.isEmpty()) {
+            gtfsDir = isDocker
+                    ? "/app/gtfs"
+                    : "src/main/resources/gtfs";
+        }
+        // Build the full path to shapes.txt
+        String shapesFile = Paths.get(gtfsDir, "shapes.txt").toString();
+
+        loadGTFSData(shapesFile);
+        logger.info("✅ GraphHopper initialized with OSM data at: {}", osmFile);
     }
 
-
-    private void loadGTFSData() {
+    private void loadGTFSData(String shapesFile) {
         try {
-            List<String> lines = Files.readAllLines(Paths.get("src/main/resources/gtfs/shapes.txt"));
+            List<String> lines = Files.readAllLines(Paths.get(shapesFile));
 
             boolean isFirstLine = true;
             for (String line : lines) {
                 if (isFirstLine) {
                     isFirstLine = false;
-                    continue;
+                    continue;  // Skip header row
                 }
 
                 String[] parts = line.split(",");
@@ -99,7 +120,6 @@ public class GraphHopperService {
             logger.error("❌ Failed to load GTFS data: {}", e.getMessage());
         }
     }
-
 
     public Map<String, Object> getOptimizedRoute(GHRequest request, String mode) {
         request.setProfile(mode);
