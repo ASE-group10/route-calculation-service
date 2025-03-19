@@ -7,6 +7,7 @@ import com.graphhopper.util.JsonFeatureCollection;
 import com.graphhopper.util.CustomModel;
 import com.graphhopper.util.PointList;
 import com.graphhopper.util.shapes.GHPoint;
+import org.springframework.beans.factory.annotation.Value;
 import org.locationtech.jts.geom.*;
 import org.locationtech.jts.operation.union.CascadedPolygonUnion;
 import org.slf4j.Logger;
@@ -37,31 +38,25 @@ public class GraphHopperService {
     private Map<String, List<double[]>> busRoutes = new HashMap<>();
     private TranslationMap translationMap;
 
+    @Value("${osm.file.path}")
+    private String osmFilePath;
+
+    @Value("${gtfs.path}")
+    private String gtfsPath;
+
+    @Value("${graph.cache.path}")
+    private String graphCachePath;
+
     @PostConstruct
     public void init() {
-        // Determine if we're running inside Docker based on an environment variable
-        boolean isDocker = System.getenv("RUNNING_IN_DOCKER") != null;
-
-        // Dynamically set the OSM file path using the environment variable, falling back to local path
-        String osmFile = System.getenv("OSM_FILE_PATH");
-        if (osmFile == null || osmFile.isEmpty()) {
-            osmFile = isDocker
-                    ? "/app/data/ireland-and-northern-ireland-latest.osm.pbf"
-                    : "src/main/resources/data/ireland-and-northern-ireland-latest.osm.pbf";
-        }
-
-        // Set the graph cache folder; adjust dynamically if needed
-        String graphFolder = isDocker ? "/app/graph-cache" : "graph-cache";
-
-        // Verify that the OSM file exists before initializing GraphHopper
-        File osmData = new File(osmFile);
+        File osmData = new File(osmFilePath);
         if (!osmData.exists()) {
-            throw new IllegalStateException("OSM file not found: " + osmData.getAbsolutePath());
+            throw new IllegalStateException("❌ OSM file not found: " + osmData.getAbsolutePath());
         }
 
         hopper = new GraphHopper()
-                .setOSMFile(osmFile)
-                .setGraphHopperLocation(graphFolder)
+                .setOSMFile(osmFilePath)
+                .setGraphHopperLocation(graphCachePath)
                 .setProfiles(
                         new Profile("car").setVehicle("car").setWeighting("custom"),
                         new Profile("bike").setVehicle("bike").setWeighting("custom"),
@@ -70,20 +65,12 @@ public class GraphHopperService {
 
         hopper.importOrLoad();
 
-        this.translationMap = hopper.getTranslationMap();
-
-        // Dynamically set the GTFS directory using environment variable, with fallback
-        String gtfsDir = System.getenv("GTFS_PATH");
-        if (gtfsDir == null || gtfsDir.isEmpty()) {
-            gtfsDir = isDocker
-                    ? "/app/gtfs"
-                    : "src/main/resources/gtfs";
-        }
-        // Build the full path to shapes.txt
-        String shapesFile = Paths.get(gtfsDir, "shapes.txt").toString();
-
+        String shapesFile = Paths.get(gtfsPath, "shapes.txt").toString();
         loadGTFSData(shapesFile);
-        logger.info("✅ GraphHopper initialized with OSM data at: {}", osmFile);
+
+        logger.info("✅ GraphHopper initialized with OSM file: {}", osmFilePath);
+        logger.info("✅ GTFS data loaded from: {}", gtfsPath);
+        logger.info("✅ Graph cache path: {}", graphCachePath);
     }
 
     private void loadGTFSData(String shapesFile) {

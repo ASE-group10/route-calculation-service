@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: route-calculation-service
+
+logging:
+  level:
+    org:
+      springframework: INFO
+
+user:
+  profile:
+    service:
+      url: ${USER_PROFILE_SERVICE_URL:http://user-profile-information-store:8080}
+
+incident:
+  service:
+    url: ${INCIDENT_SERVICE_URL:http://real-time-incident-notification-service:8080}
+
+environmental:
+  data:
+    service:
+      url: ${ENVIRONMENTAL_DATA_SERVICE_URL:http://environmental-data-service:8080}
+
+osm:
+  file:
+    path: ${OSM_FILE_PATH:src/main/resources/data/ireland-and-northern-ireland-latest.osm.pbf}
+
+gtfs:
+  path: ${GTFS_PATH:src/main/resources/gtfs}
+
+graph:
+  cache:
+    path: ${GRAPH_CACHE_PATH:graph-cache}
