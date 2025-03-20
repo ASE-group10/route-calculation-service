@@ -1,38 +1,46 @@
-name: Build
+name: Build Release Image NonPRD
 
 on:
   push:
     branches:
       - main
-
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - name: Set up JDK 17
-        uses: actions/setup-java@v1
-        with:
-          java-version: 17
-      - name: Cache SonarQube packages
-        uses: actions/cache@v1
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-      - name: Cache Maven packages
-        uses: actions/cache@v1
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
-      - name: Build and analyze
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Build, tag, and push image to Docker Hub
+        id: build-image
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=ASE-group10_route-calculation-service_AZNjiwFX_rtjaVjcrgPh
+          DOCKER_REPO: ${{ secrets.DOCKER_HUB_USERNAME }}/route-calculation-service
+          IMAGE_TAG: v${{ github.run_number }}
+        run: |
+          docker build -t ${DOCKER_REPO}:${IMAGE_TAG} .
+          docker push ${DOCKER_REPO}:${IMAGE_TAG}
+          echo "pushed image: ${DOCKER_REPO}:${IMAGE_TAG}"
+
+      - name: Tag the build version
+        run: |
+          git tag "v${GITHUB_RUN_NUMBER}"
+          git push origin "v${GITHUB_RUN_NUMBER}"
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            tag_name: v${{ github.run_number }}
+            release_name: Release v${{ github.run_number }}
+            draft: false
+            prerelease: false
