@@ -1,51 +1,46 @@
-# ===== STAGE 1: Build the application =====
-FROM maven:3.9.5-eclipse-temurin-17 AS builder
+name: Build Release Image NonPRD
 
-WORKDIR /app
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
-# Copy pom.xml and resolve dependencies (caching)
-COPY pom.xml ./
-RUN mvn dependency:go-offline -B
+jobs:
+  build:
+    runs-on: self-hosted
 
-# Copy source code and build the JAR
-COPY src ./src
-RUN mvn clean package -DskipTests
+    steps:
+      - uses: actions/checkout@v4
 
-# ===== STAGE 2: Create the final runtime image =====
-FROM openjdk:17-jdk-slim
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-WORKDIR /app
+      - name: Build, tag, and push image to Docker Hub
+        id: build-image
+        env:
+          DOCKER_REPO: ${{ secrets.DOCKER_HUB_USERNAME }}/route-calculation-service
+          IMAGE_TAG: v${{ github.run_number }}
+        run: |
+          docker build -t ${DOCKER_REPO}:${IMAGE_TAG} .
+          docker push ${DOCKER_REPO}:${IMAGE_TAG}
+          echo "pushed image: ${DOCKER_REPO}:${IMAGE_TAG}"
 
-# Install curl and tar (needed for downloads and extraction)
-RUN apt-get update && apt-get install -y curl unzip && rm -rf /var/lib/apt/lists/*
+      - name: Tag the build version
+        run: |
+          git tag "v${GITHUB_RUN_NUMBER}"
+          git push origin "v${GITHUB_RUN_NUMBER}"
 
-# Create necessary directories
-RUN mkdir -p /app/gtfs /app/data
-
-# Copy the built JAR from the builder stage
-COPY --from=builder /app/target/routecalc-0.0.1-SNAPSHOT.jar /app/app.jar
-
-# Copy or download OSM PBF data
-COPY src/main/resources/data/ireland-and-northern-ireland-latest.osm.pbf /app/data/ 2>/dev/null || \
-    (echo "OSM PBF file not found locally, downloading..." && \
-    curl -L -o /app/data/ireland-and-northern-ireland-latest.osm.pbf \
-    "https://download.geofabrik.de/europe/ireland-and-northern-ireland-latest.osm.pbf")
-
-# Copy or download GTFS data
-RUN if [ -d "src/main/resources/gtfs" ]; then \
-      echo "Copying existing GTFS data..."; \
-      cp -r src/main/resources/gtfs/* /app/gtfs/; \
-    else \
-      echo "GTFS data not found locally, downloading..."; \
-      curl -L -o /app/gtfs/latest-gtfs.zip \
-      "https://transitfeeds.com/p/transport-for-ireland/782/latest/download"; \
-      echo "Extracting GTFS data..."; \
-      unzip /app/gtfs/latest-gtfs.zip -d /app/gtfs/; \
-      rm /app/gtfs/latest-gtfs.zip; \
-    fi
-
-# Verify the copied/downloaded files
-RUN ls -l /app && ls -l /app/data && ls -l /app/gtfs
-
-# Set the entrypoint
-ENTRYPOINT ["java", "-jar", "app.jar"]
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            tag_name: v${{ github.run_number }}
+            release_name: Release v${{ github.run_number }}
+            draft: false
+            prerelease: false
