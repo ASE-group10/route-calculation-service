@@ -73,6 +73,12 @@
 			<scope>test</scope>
 		</dependency>
 
+		<dependency>
+			<groupId>io.pyroscope</groupId>
+			<artifactId>agent</artifactId>
+			<version>0.15.2</version>
+		</dependency>
+
 		<!-- AWS SDK for Secrets Manager -->
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>

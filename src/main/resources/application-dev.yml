@@ -34,3 +34,10 @@ gtfs:
 graph:
   cache:
     path: ${GRAPH_CACHE_PATH:graph-cache}
+
+pyroscope:
+  server:
+    address: ${PYROSCOPE_SERVER_ADDRESS}
+  auth:
+    user: ${PYROSCOPE_AUTH_USER}
+    password: ${PYROSCOPE_AUTH_PASSWORD}
