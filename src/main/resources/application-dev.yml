@@ -1,6 +1,9 @@
 spring:
   application:
     name: route-calculation-service
+  config:
+    activate:
+      on-profile: dev
 
 logging:
   level:
