@@ -17,8 +17,6 @@ import com.graphhopper.util.Instruction;
 import com.graphhopper.util.InstructionList;
 import com.graphhopper.util.Translation;
 import com.graphhopper.util.TranslationMap;
-import com.graphhopper.util.PointList;
-
 import javax.annotation.PostConstruct;
 import java.io.File;
 import java.nio.file.Files;
@@ -76,20 +74,17 @@ public class GraphHopperService {
     private void loadGTFSData(String shapesFile) {
         try {
             List<String> lines = Files.readAllLines(Paths.get(shapesFile));
-
             boolean isFirstLine = true;
             for (String line : lines) {
                 if (isFirstLine) {
                     isFirstLine = false;
                     continue;  // Skip header row
                 }
-
                 String[] parts = line.split(",");
                 if (parts.length < 4) continue;
 
                 String shapeId = parts[0];
                 double lat, lon;
-
                 try {
                     lat = Double.parseDouble(parts[1]);
                     lon = Double.parseDouble(parts[2]);
@@ -97,12 +92,9 @@ public class GraphHopperService {
                     logger.warn("⚠️ Skipping invalid line in GTFS file: {}", line);
                     continue;
                 }
-
                 busRoutes.computeIfAbsent(shapeId, k -> new ArrayList<>()).add(new double[]{lon, lat});
             }
-
             logger.info("🚌 GTFS data loaded successfully! {} bus routes available.", busRoutes.size());
-
         } catch (Exception e) {
             logger.error("❌ Failed to load GTFS data: {}", e.getMessage());
         }
@@ -126,12 +118,14 @@ public class GraphHopperService {
             if (response == null || response.hasErrors() || response.getAll().isEmpty()) {
                 logger.error("❌ Iteration {}: Failed to calculate route for mode {}. Errors: {}",
                         currentIteration, mode, response != null ? response.getErrors() : "No response");
-                if (currentIteration == 1) return Map.of("error", "Failed to calculate route.");
+                if (currentIteration == 1)
+                    return Map.of("error", "Failed to calculate route.");
                 continue;
             }
 
             List<List<Double>> routeCoords = extractCoordinates(response.getBest());
-            logger.info("📍 Extracted {} route coordinates in Iteration #{} for mode {}", routeCoords.size(), currentIteration, mode);
+            logger.info("📍 Extracted {} route coordinates in Iteration #{} for mode {}",
+                    routeCoords.size(), currentIteration, mode);
             logRouteCoordinates(routeCoords, "Iteration_" + currentIteration);
 
             List<List<Double>> badCoords = identifyBadCoordinates(routeCoords);
@@ -141,14 +135,12 @@ public class GraphHopperService {
                         "iterations", currentIteration,
                         "bestPath", response.getBest(),
                         "response", response,
-                        "bad_areas", lastBadAreas.isEmpty() ? null : lastBadAreas
+                        "bad_areas", lastBadAreas.isEmpty() ? List.of() : lastBadAreas
                 );
             } else {
                 logger.warn("❌ Iteration {}: Found {} bad coords => Creating new 'bad_area_{}' for mode {}",
                         currentIteration, badCoords.size(), currentIteration, mode);
-
                 lastBadAreas.addAll(badCoords);
-
                 updateCustomModel(request, badCoords, currentIteration);
 
                 if (badCoords.size() < minBadCoords) {
@@ -169,8 +161,6 @@ public class GraphHopperService {
                 "bad_areas", lastBadAreas.isEmpty() ? null : lastBadAreas
         );
     }
-
-
 
     public Map<String, Object> getBusRouteWithWalking(List<List<Double>> userPoints) {
         GHPoint start = new GHPoint(userPoints.get(0).get(1), userPoints.get(0).get(0));
@@ -198,16 +188,44 @@ public class GraphHopperService {
         response.put("mode", "bus");
 
         Map<String, Object> walkToBusStop = formatPathSegment(walkToBusStopResp.getBest(), "walk", "Origin", "Bus Stop");
-
         Map<String, Object> busSegment = formatBusSegment(
-                busRouteData.get("busRoute").toString(), startBusStop, endBusStop, formattedBusPoints
-        );
-
+                busRouteData.get("busRoute").toString(), startBusStop, endBusStop, formattedBusPoints);
         Map<String, Object> walkFromBusStop = formatPathSegment(walkFromBusStopResp.getBest(), "walk", "Bus Stop", "Destination");
 
         response.put("paths", List.of(walkToBusStop, busSegment, walkFromBusStop));
-
         return response;
+    }
+
+    public Map<String, Object> getBusRoute(List<List<Double>> points) {
+        double startLat = points.get(0).get(1);
+        double startLon = points.get(0).get(0);
+        double endLat = points.get(1).get(1);
+        double endLon = points.get(1).get(0);
+
+        double minStartDist = Double.MAX_VALUE;
+        double minEndDist = Double.MAX_VALUE;
+        String bestRoute = null;
+
+        for (Map.Entry<String, List<double[]>> entry : busRoutes.entrySet()) {
+            double[] firstStop = entry.getValue().get(0);
+            double[] lastStop = entry.getValue().get(entry.getValue().size() - 1);
+
+            double startDist = distance(startLat, startLon, firstStop[1], firstStop[0]);
+            double endDist = distance(endLat, endLon, lastStop[1], lastStop[0]);
+
+            if (startDist < minStartDist && endDist < minEndDist) {
+                minStartDist = startDist;
+                minEndDist = endDist;
+                bestRoute = entry.getKey();
+            }
+        }
+
+        if (bestRoute != null) {
+            logger.info("🚌 Best bus route found: {}", bestRoute);
+            return Map.of("mode", "bus", "busRoute", bestRoute, "points", busRoutes.get(bestRoute));
+        } else {
+            return Map.of("error", "No bus route found for this journey.");
+        }
     }
 
     private GHPoint closestPoint(GHPoint userLocation, List<double[]> busRoutePoints) {
@@ -229,7 +247,6 @@ public class GraphHopperService {
         if (path == null) {
             return Map.of("error", "Failed to calculate path segment");
         }
-
         return Map.of(
                 "mode", mode,
                 "distance", path.getDistance(),
@@ -252,7 +269,6 @@ public class GraphHopperService {
         }
         return instructions;
     }
-
 
     private Map<String, Object> formatInstruction(Instruction instruction, Translation tr) {
         Map<String, Object> instr = new HashMap<>();
@@ -305,49 +321,15 @@ public class GraphHopperService {
         return coordinates;
     }
 
-    public Map<String, Object> getBusRoute(List<List<Double>> points) {
-        double startLat = points.get(0).get(1);
-        double startLon = points.get(0).get(0);
-        double endLat = points.get(1).get(1);
-        double endLon = points.get(1).get(0);
-
-        double minStartDist = Double.MAX_VALUE;
-        double minEndDist = Double.MAX_VALUE;
-        String bestRoute = null;
-
-        for (Map.Entry<String, List<double[]>> entry : busRoutes.entrySet()) {
-            double[] firstStop = entry.getValue().get(0);
-            double[] lastStop = entry.getValue().get(entry.getValue().size() - 1);
-
-            double startDist = distance(startLat, startLon, firstStop[1], firstStop[0]);
-            double endDist = distance(endLat, endLon, lastStop[1], lastStop[0]);
-
-            if (startDist < minStartDist && endDist < minEndDist) {
-                minStartDist = startDist;
-                minEndDist = endDist;
-                bestRoute = entry.getKey();
-            }
-        }
-
-        if (bestRoute != null) {
-            logger.info("🚌 Best bus route found: {}", bestRoute);
-            return Map.of("mode", "bus", "busRoute", bestRoute, "points", busRoutes.get(bestRoute));
-        } else {
-            return Map.of("error", "No bus route found for this journey.");
-        }
-    }
-
     private List<List<Double>> extractCoordinates(ResponsePath path) {
         List<List<Double>> coords = new ArrayList<>();
         if (path == null || path.getPoints().isEmpty()) return coords;
-
         PointList points = path.getPoints();
         for (int i = 0; i < points.size(); i++) {
             coords.add(Arrays.asList(points.getLon(i), points.getLat(i)));
         }
         return coords;
     }
-
 
     private List<List<Double>> identifyBadCoordinates(List<List<Double>> coords) {
         List<List<Double>> badCoords = new ArrayList<>();
@@ -369,7 +351,6 @@ public class GraphHopperService {
         double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
                 Math.cos(phi1) * Math.cos(phi2) *
                         Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
-
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     }
@@ -379,7 +360,6 @@ public class GraphHopperService {
             logger.warn("⚠️ No coordinates found for {}.", label);
             return;
         }
-
         StringBuilder logMessage = new StringBuilder("\n📌 **Route Coordinates for " + label + "**:\n[\n");
         for (List<Double> c : coords) {
             logMessage.append(String.format("  [%.6f, %.6f],\n", c.get(0), c.get(1)));
@@ -394,13 +374,11 @@ public class GraphHopperService {
             cm = new CustomModel();
             request.setCustomModel(cm);
         }
-
         JsonFeatureCollection fc = cm.getAreas();
         if (fc == null) {
             fc = new JsonFeatureCollection();
             cm.setAreas(fc);
         }
-
         String areaId = "bad_area_" + iteration;
         Geometry badArea = createAvoidancePolygon(badCoords);
 
@@ -429,14 +407,11 @@ public class GraphHopperService {
         }
     }
 
-
     private Geometry createAvoidancePolygon(List<List<Double>> badCoords) {
         if (badCoords.isEmpty()) return null;
-
         List<Polygon> polygons = badCoords.stream()
                 .map(coord -> generateHexagon(coord, 100))
                 .collect(Collectors.toList());
-
         return CascadedPolygonUnion.union(polygons);
     }
 
@@ -444,7 +419,6 @@ public class GraphHopperService {
         Coordinate[] corners = new Coordinate[7];
         double lon = center.get(0);
         double lat = center.get(1);
-
         for (int i = 0; i < 6; i++) {
             double angleRad = Math.toRadians(60 * i);
             corners[i] = new Coordinate(
@@ -453,7 +427,6 @@ public class GraphHopperService {
             );
         }
         corners[6] = corners[0];
-
         return geometryFactory.createPolygon(geometryFactory.createLinearRing(corners));
     }
 }
