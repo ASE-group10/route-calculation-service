@@ -17,6 +17,8 @@ import com.graphhopper.util.Instruction;
 import com.graphhopper.util.InstructionList;
 import com.graphhopper.util.Translation;
 import com.graphhopper.util.TranslationMap;
+import com.graphhopper.util.PointList;
+
 import javax.annotation.PostConstruct;
 import java.io.File;
 import java.nio.file.Files;
@@ -66,6 +68,9 @@ public class GraphHopperService {
         String shapesFile = Paths.get(gtfsPath, "shapes.txt").toString();
         loadGTFSData(shapesFile);
 
+        // Initialize translationMap here to avoid NullPointerException.
+        translationMap = new TranslationMap().doImport();
+
         logger.info("✅ GraphHopper initialized with OSM file: {}", osmFilePath);
         logger.info("✅ GTFS data loaded from: {}", gtfsPath);
         logger.info("✅ Graph cache path: {}", graphCachePath);
@@ -82,7 +87,6 @@ public class GraphHopperService {
                 }
                 String[] parts = line.split(",");
                 if (parts.length < 4) continue;
-
                 String shapeId = parts[0];
                 double lat, lon;
                 try {
@@ -158,7 +162,7 @@ public class GraphHopperService {
                 "iterations", maxIterations,
                 "bestPath", bestResponse.getBest(),
                 "response", bestResponse,
-                "bad_areas", lastBadAreas.isEmpty() ? null : lastBadAreas
+                "bad_areas", lastBadAreas.isEmpty() ? List.of() : lastBadAreas
         );
     }
 
@@ -172,8 +176,23 @@ public class GraphHopperService {
         }
 
         List<double[]> busPoints = (List<double[]>) busRouteData.get("points");
-        GHPoint startBusStop = closestPoint(start, busPoints);
-        GHPoint endBusStop = closestPoint(end, busPoints);
+        // Find the indices of the stops closest to the user start and end points
+        int startIndex = findClosestIndex(start, busPoints);
+        int endIndex = findClosestIndex(end, busPoints);
+
+        // Ensure the indices are in proper order
+        if (startIndex > endIndex) {
+            int temp = startIndex;
+            startIndex = endIndex;
+            endIndex = temp;
+        }
+
+        // Use only the bus stops between the two indices for the bus segment
+        List<double[]> busSegmentPoints = busPoints.subList(startIndex, endIndex + 1);
+
+        // Determine bus stops based on the sublist
+        GHPoint startBusStop = new GHPoint(busPoints.get(startIndex)[1], busPoints.get(startIndex)[0]);
+        GHPoint endBusStop = new GHPoint(busPoints.get(endIndex)[1], busPoints.get(endIndex)[0]);
 
         GHRequest toBusStopRequest = new GHRequest(start, startBusStop).setProfile("walk");
         GHRequest fromBusStopRequest = new GHRequest(endBusStop, end).setProfile("walk");
@@ -181,7 +200,8 @@ public class GraphHopperService {
         GHResponse walkToBusStopResp = hopper.route(toBusStopRequest);
         GHResponse walkFromBusStopResp = hopper.route(fromBusStopRequest);
 
-        List<List<Double>> formattedBusPoints = convertBusPoints(busPoints);
+        // Convert only the sublist of bus points for display
+        List<List<Double>> formattedBusPoints = convertBusPoints(busSegmentPoints);
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", "success");
@@ -195,6 +215,23 @@ public class GraphHopperService {
         response.put("paths", List.of(walkToBusStop, busSegment, walkFromBusStop));
         return response;
     }
+
+    // Helper method to find the index of the closest bus stop to a given user point
+    private int findClosestIndex(GHPoint point, List<double[]> busPoints) {
+        int bestIndex = 0;
+        double bestDist = Double.MAX_VALUE;
+        for (int i = 0; i < busPoints.size(); i++) {
+            double[] coord = busPoints.get(i);
+            GHPoint busStop = new GHPoint(coord[1], coord[0]);
+            double dist = distance(point.getLat(), point.getLon(), busStop.getLat(), busStop.getLon());
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestIndex = i;
+            }
+        }
+        return bestIndex;
+    }
+
 
     public Map<String, Object> getBusRoute(List<List<Double>> points) {
         double startLat = points.get(0).get(1);
@@ -231,7 +268,6 @@ public class GraphHopperService {
     private GHPoint closestPoint(GHPoint userLocation, List<double[]> busRoutePoints) {
         GHPoint closest = null;
         double minDist = Double.MAX_VALUE;
-
         for (double[] coord : busRoutePoints) {
             GHPoint busStop = new GHPoint(coord[1], coord[0]);
             double dist = distance(userLocation.getLat(), userLocation.getLon(), busStop.getLat(), busStop.getLon());
@@ -263,7 +299,6 @@ public class GraphHopperService {
         List<Map<String, Object>> instructions = new ArrayList<>();
         Translation tr = translationMap.getWithFallBack(Locale.ENGLISH);
         InstructionList instructionList = path.getInstructions();
-
         for (Instruction instruction : instructionList) {
             instructions.add(formatInstruction(instruction, tr));
         }
@@ -276,7 +311,6 @@ public class GraphHopperService {
         instr.put("distance", instruction.getDistance());
         instr.put("time", instruction.getTime());
         instr.put("sign", instruction.getSign());
-
         PointList points = instruction.getPoints();
         if (!points.isEmpty()) {
             double lon = points.getLon(0);
@@ -334,7 +368,7 @@ public class GraphHopperService {
     private List<List<Double>> identifyBadCoordinates(List<List<Double>> coords) {
         List<List<Double>> badCoords = new ArrayList<>();
         for (List<Double> c : coords) {
-            if (Math.random() < 0.01) {
+            if (Math.random() < 0.05) {
                 badCoords.add(c);
             }
         }
@@ -347,7 +381,6 @@ public class GraphHopperService {
         double phi2 = Math.toRadians(lat2);
         double deltaLat = Math.toRadians(lat2 - lat1);
         double deltaLon = Math.toRadians(lon2 - lon1);
-
         double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
                 Math.cos(phi1) * Math.cos(phi2) *
                         Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
@@ -381,13 +414,10 @@ public class GraphHopperService {
         }
         String areaId = "bad_area_" + iteration;
         Geometry badArea = createAvoidancePolygon(badCoords);
-
         if (badArea != null) {
             JsonFeature feature = new JsonFeature(areaId, "Feature", null, badArea, new HashMap<>());
             fc.getFeatures().add(feature);
             cm.addToPriority(If("in_" + areaId, MULTIPLY, "0.01"));
-
-            logger.info("🔧 Updated priority => if(in_{}) then multiply by 0.01", areaId);
             logPolygonCoordinates(badArea, areaId);
         }
     }
@@ -428,5 +458,72 @@ public class GraphHopperService {
         }
         corners[6] = corners[0];
         return geometryFactory.createPolygon(geometryFactory.createLinearRing(corners));
+    }
+
+    // ------------------- New chained route feature -------------------
+
+    public Map<String, Object> getChainedRoute(List<List<Double>> points, List<String> modes) {
+        if (points.size() != modes.size() + 1) {
+            return Map.of("error", "For chained route, number of points must be one more than number of modes");
+        }
+        List<Map<String, Object>> segments = new ArrayList<>();
+        double totalDistance = 0;
+        long totalTime = 0;
+        for (int i = 0; i < modes.size(); i++) {
+            String mode = modes.get(i);
+            Map<String, Object> segmentResult;
+            if (mode.equalsIgnoreCase("bus")) {
+                // For bus segments, use bus route with walking between the two given points
+                List<List<Double>> segmentPoints = new ArrayList<>();
+                segmentPoints.add(points.get(i));
+                segmentPoints.add(points.get(i + 1));
+                segmentResult = getBusRouteWithWalking(segmentPoints);
+                if (segmentResult.containsKey("error")) {
+                    return segmentResult;
+                }
+                List<Map<String, Object>> paths = (List<Map<String, Object>>) segmentResult.get("paths");
+                double segmentDistance = 0;
+                long segmentTime = 0;
+                for (Map<String, Object> path : paths) {
+                    if (path.containsKey("distance") && path.containsKey("time")) {
+                        segmentDistance += ((Number) path.get("distance")).doubleValue();
+                        segmentTime += ((Number) path.get("time")).longValue();
+                    }
+                }
+                Map<String, Object> segmentData = new HashMap<>();
+                segmentData.put("mode", mode);
+                segmentData.put("distance", segmentDistance);
+                segmentData.put("time", segmentTime);
+                segmentData.put("paths", paths);
+                segments.add(segmentData);
+                totalDistance += segmentDistance;
+                totalTime += segmentTime;
+            } else {
+                GHRequest request = new GHRequest(
+                        points.get(i).get(1), points.get(i).get(0),
+                        points.get(i + 1).get(1), points.get(i + 1).get(0)
+                ).setProfile(mode);
+                segmentResult = getOptimizedRoute(request, mode);
+                if (segmentResult.containsKey("error")) {
+                    return segmentResult;
+                }
+                ResponsePath bestPath = (ResponsePath) segmentResult.get("bestPath");
+                Map<String, Object> segmentData = new HashMap<>();
+                segmentData.put("mode", mode);
+                segmentData.put("distance", bestPath.getDistance());
+                segmentData.put("time", bestPath.getTime());
+                segmentData.put("points", extractCoordinates(bestPath));
+                segmentData.put("instructions", extractInstructions(bestPath));
+                segments.add(segmentData);
+                totalDistance += bestPath.getDistance();
+                totalTime += bestPath.getTime();
+            }
+        }
+        Map<String, Object> chainedResponse = new HashMap<>();
+        chainedResponse.put("status", "success");
+        chainedResponse.put("total_distance", totalDistance);
+        chainedResponse.put("total_time", totalTime);
+        chainedResponse.put("segments", segments);
+        return chainedResponse;
     }
 }

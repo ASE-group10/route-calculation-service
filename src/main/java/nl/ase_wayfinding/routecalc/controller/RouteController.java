@@ -33,6 +33,16 @@ public class RouteController {
             return ResponseEntity.badRequest().body(Map.of("error", "At least two points required"));
         }
 
+        // Check for chained routing (multiple segments)
+        if (body.containsKey("modes")) {
+            List<String> modes = (List<String>) body.get("modes");
+            if (modes.size() != points.size() - 1) {
+                return ResponseEntity.badRequest().body(Map.of("error", "For chained route, number of modes must be one less than number of points"));
+            }
+            Map<String, Object> chainedRoute = graphHopperService.getChainedRoute(points, modes);
+            return ResponseEntity.ok(chainedRoute);
+        }
+
         String mode = (String) body.getOrDefault("mode", "car");
         if (mode.equalsIgnoreCase("bus")) {
             Map<String, Object> busRoute = graphHopperService.getBusRouteWithWalking(points);
@@ -43,22 +53,17 @@ public class RouteController {
                 points.get(0).get(1), points.get(0).get(0),
                 points.get(1).get(1), points.get(1).get(0)
         ).setProfile(mode);
-
         Map<String, Object> routeResult = graphHopperService.getOptimizedRoute(request, mode);
-
         if (routeResult.containsKey("error")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(routeResult);
         }
-
         int actualIterations = (int) routeResult.get("iterations");
         ResponsePath bestPath = (ResponsePath) routeResult.get("bestPath");
         GHResponse response = (GHResponse) routeResult.get("response");
-
         if (response == null || bestPath == null) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to generate a valid route"));
         }
-
         Map<String, Object> formattedResponse = buildFormattedResponse(actualIterations, mode, response, bestPath, routeResult);
         return ResponseEntity.ok(formattedResponse);
     }
