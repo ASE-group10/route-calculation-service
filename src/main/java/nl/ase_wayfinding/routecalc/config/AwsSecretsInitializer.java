@@ -37,7 +37,6 @@ public class AwsSecretsInitializer implements ApplicationContextInitializer<Conf
             // ✅ Optional: Print test values
             System.out.println("✅ 🔐 AWS secrets injected:");
             System.out.println("🧩 All keys: " + secrets.keySet());
-            secrets.forEach((key, value) -> System.out.println("🔑 " + key + " = " + value));
 
         } catch (Exception e) {
             throw new RuntimeException("❌ Failed to load AWS Secrets", e);

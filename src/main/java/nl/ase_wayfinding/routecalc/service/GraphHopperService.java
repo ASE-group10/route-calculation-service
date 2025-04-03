@@ -93,7 +93,7 @@ public class GraphHopperService {
                     lat = Double.parseDouble(parts[1]);
                     lon = Double.parseDouble(parts[2]);
                 } catch (NumberFormatException e) {
-                    logger.warn("⚠️ Skipping invalid line in GTFS file: {}", line);
+//                    logger.warn("⚠️ Skipping invalid line in GTFS file: {}", line);
                     continue;
                 }
                 busRoutes.computeIfAbsent(shapeId, k -> new ArrayList<>()).add(new double[]{lon, lat});
