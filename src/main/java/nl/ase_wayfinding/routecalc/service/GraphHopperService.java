@@ -59,8 +59,8 @@ public class GraphHopperService {
     @Value("${graph.cache.path}")
     private String graphCachePath;
 
-    @Value("${ENV_SERVICE_NAME}")
-    private String environmentalDataServiceName;
+    @Value("${service.internal-urls.environmental-data}")
+    private String environmentalDataServiceUrl;
 
     @PostConstruct
     public void init() {
@@ -393,8 +393,7 @@ public class GraphHopperService {
         }
 
         try {
-            // Build URL using the base URL from .env
-            String url = "http://" + environmentalDataServiceName + ":8080/environmental-data";
+            String url = environmentalDataServiceUrl + "/environmental-data";
             logger.info("🌍 Environmental data service URL: {}", url);
 
             // Convert sampled coordinates to the expected JSON format (latitude, longitude)
