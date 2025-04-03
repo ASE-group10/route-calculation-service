@@ -28,11 +28,23 @@ import java.util.stream.Collectors;
 
 import static com.graphhopper.json.Statement.If;
 import static com.graphhopper.json.Statement.Op.MULTIPLY;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 
 @Service
 public class GraphHopperService {
 
     private static final Logger logger = LoggerFactory.getLogger(GraphHopperService.class);
+    private final RestTemplate restTemplate;
+
+    public GraphHopperService(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
     private GraphHopper hopper;
     private final GeometryFactory geometryFactory = new GeometryFactory();
     private Map<String, List<double[]>> busRoutes = new HashMap<>();
@@ -46,6 +58,9 @@ public class GraphHopperService {
 
     @Value("${graph.cache.path}")
     private String graphCachePath;
+
+    @Value("${ENV_SERVICE_NAME}")
+    private String environmentalDataServiceName;
 
     @PostConstruct
     public void init() {
@@ -165,6 +180,7 @@ public class GraphHopperService {
                 "bad_areas", lastBadAreas.isEmpty() ? List.of() : lastBadAreas
         );
     }
+
 
     public Map<String, Object> getBusRouteWithWalking(List<List<Double>> userPoints) {
         GHPoint start = new GHPoint(userPoints.get(0).get(1), userPoints.get(0).get(0));
@@ -367,11 +383,65 @@ public class GraphHopperService {
 
     private List<List<Double>> identifyBadCoordinates(List<List<Double>> coords) {
         List<List<Double>> badCoords = new ArrayList<>();
-        for (List<Double> c : coords) {
-            if (Math.random() < 0.05) {
-                badCoords.add(c);
-            }
+        if (coords.isEmpty()) return badCoords;
+
+        // Sample every n-th coordinate (adjust samplingInterval as needed)
+        int samplingInterval = 5;
+        List<List<Double>> sampledCoords = new ArrayList<>();
+        for (int i = 0; i < coords.size(); i += samplingInterval) {
+            sampledCoords.add(coords.get(i));
         }
+
+        try {
+            // Build URL using the base URL from .env
+            String url = "http://" + environmentalDataServiceName + ":8080/environmental-data";
+            logger.info("🌍 Environmental data service URL: {}", url);
+
+            // Convert sampled coordinates to the expected JSON format (latitude, longitude)
+            List<Map<String, Double>> waypoints = sampledCoords.stream()
+                    .map(p -> Map.of("latitude", p.get(1), "longitude", p.get(0)))
+                    .collect(Collectors.toList());
+
+            // Prepare headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Accept", "application/json");
+
+            // Create the request entity
+            HttpEntity<List<Map<String, Double>>> requestEntity = new HttpEntity<>(waypoints, headers);
+
+            logger.info("📍 Sending request to environmental data service with waypoints: {}", waypoints);
+
+            // Make the POST request
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, List.class);
+
+            logger.info("🌐 Environmental data service response: {}", response);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                List<Map<String, Object>> envData = response.getBody();
+                logger.info("✅ Environmental data received: {}", envData);
+
+                // Iterate over the environmental data samples
+                for (int i = 0; i < envData.size(); i++) {
+                    Map<String, Object> data = envData.get(i);
+                    int aqi = 0;
+                    if (data.get("aqi") instanceof Number) {
+                        aqi = ((Number) data.get("aqi")).intValue();
+                    }
+                    // If the AQI is greater than 3, mark the corresponding sampled coordinate as bad
+                    if (aqi > 3) {
+                        badCoords.add(sampledCoords.get(i));
+                        logger.warn("🚫 High AQI detected ({}), marking as bad coordinate: {}", aqi, sampledCoords.get(i));
+                    }
+                }
+            } else {
+                logger.error("❌ Failed to fetch environmental data. Status code: {}, Response: {}",
+                        response.getStatusCode(), response);
+            }
+        } catch (Exception e) {
+            logger.error("❌ Error while fetching environmental data: {}", e.getMessage());
+        }
+        logger.info("🚦 Total bad coordinates identified: {}", badCoords.size());
         return badCoords;
     }
 
