@@ -41,3 +41,7 @@ pyroscope:
   auth:
     user: ${PYROSCOPE_AUTH_USER}
     password: ${PYROSCOPE_AUTH_PASSWORD}
+
+service:
+  internal-urls:
+    environmental-data: ${ENVIRONMENTAL_DATA_SERVICE_INTERNAL_URL}
