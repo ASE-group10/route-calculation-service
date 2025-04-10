@@ -18,6 +18,8 @@ import com.graphhopper.util.InstructionList;
 import com.graphhopper.util.Translation;
 import com.graphhopper.util.TranslationMap;
 import com.graphhopper.util.PointList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.PostConstruct;
 import java.io.File;
@@ -93,7 +95,14 @@ public class GraphHopperService {
 
     private void loadGTFSData(String shapesFile) {
         try {
+            logger.info("🔍 Reading GTFS shapes.txt from: {}", shapesFile);
+
             List<String> lines = Files.readAllLines(Paths.get(shapesFile));
+
+            logger.info("📄 GTFS file line count: {}", lines.size());
+            if (lines.size() > 1) {
+                logger.info("📄 Sample GTFS shape lines:\n{}\n{}", lines.get(1), lines.size() > 2 ? lines.get(2) : "");
+            }
             boolean isFirstLine = true;
             for (String line : lines) {
                 if (isFirstLine) {
@@ -183,24 +192,34 @@ public class GraphHopperService {
 
 
     public Map<String, Object> getBusRouteWithWalking(List<List<Double>> userPoints) {
+        logger.info("Calculating bus route with walking for userPoints: {}", userPoints);
         GHPoint start = new GHPoint(userPoints.get(0).get(1), userPoints.get(0).get(0));
         GHPoint end = new GHPoint(userPoints.get(1).get(1), userPoints.get(1).get(0));
+        logger.debug("Start GHPoint: {}, End GHPoint: {}", start, end);
 
         Map<String, Object> busRouteData = getBusRoute(userPoints);
         if (busRouteData.containsKey("error")) {
+            logger.warn("Bus route calculation failed: {}", busRouteData.get("error"));
             return busRouteData;
         }
 
         List<double[]> busPoints = (List<double[]>) busRouteData.get("points");
+        if (busPoints == null || busPoints.isEmpty()) {
+            logger.error("Bus points are empty or null");
+            return Map.of("error", "No bus route found");
+        }
+
         // Find the indices of the stops closest to the user start and end points
         int startIndex = findClosestIndex(start, busPoints);
         int endIndex = findClosestIndex(end, busPoints);
+        logger.debug("Closest startIndex: {}, endIndex: {}", startIndex, endIndex);
 
         // Ensure the indices are in proper order
         if (startIndex > endIndex) {
             int temp = startIndex;
             startIndex = endIndex;
             endIndex = temp;
+            logger.debug("Swapped indices to maintain order: startIndex={}, endIndex={}", startIndex, endIndex);
         }
 
         // Use only the bus stops between the two indices for the bus segment
@@ -216,6 +235,15 @@ public class GraphHopperService {
         GHResponse walkToBusStopResp = hopper.route(toBusStopRequest);
         GHResponse walkFromBusStopResp = hopper.route(fromBusStopRequest);
 
+        if (walkToBusStopResp.hasErrors()) {
+            logger.error("Walking route to bus stop failed: {}", walkToBusStopResp.getErrors());
+            return Map.of("error", "Failed to generate walking route to bus stop");
+        }
+        if (walkFromBusStopResp.hasErrors()) {
+            logger.error("Walking route from bus stop failed: {}", walkFromBusStopResp.getErrors());
+            return Map.of("error", "Failed to generate walking route from bus stop");
+        }
+
         // Convert only the sublist of bus points for display
         List<List<Double>> formattedBusPoints = convertBusPoints(busSegmentPoints);
 
@@ -229,6 +257,7 @@ public class GraphHopperService {
         Map<String, Object> walkFromBusStop = formatPathSegment(walkFromBusStopResp.getBest(), "walk", "Bus Stop", "Destination");
 
         response.put("paths", List.of(walkToBusStop, busSegment, walkFromBusStop));
+        logger.info("Completed bus route with walking successfully.");
         return response;
     }
 

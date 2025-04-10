@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.graphhopper.util.TranslationMap;
 import com.graphhopper.util.Translation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.*;
@@ -19,6 +21,8 @@ import java.util.*;
 @RestController
 @RequestMapping("/route")
 public class RouteController {
+    private static final Logger logger = LoggerFactory.getLogger(RouteController.class);
+
     private final TranslationMap translationMap = new TranslationMap().doImport();
     private final GraphHopperService graphHopperService;
 
@@ -28,43 +32,68 @@ public class RouteController {
 
     @PostMapping
     public ResponseEntity<?> calculateRoute(@RequestBody Map<String, Object> body) {
+        logger.info("Received route calculation request: {}", body);
         List<List<Double>> points = (List<List<Double>>) body.get("points");
         if (points.size() < 2) {
+            logger.warn("Invalid request: Less than 2 points");
             return ResponseEntity.badRequest().body(Map.of("error", "At least two points required"));
         }
 
         // Check for chained routing (multiple segments)
         if (body.containsKey("modes")) {
             List<String> modes = (List<String>) body.get("modes");
+            logger.info("Chained routing with modes: {}", modes);
             if (modes.size() != points.size() - 1) {
+                logger.warn("Invalid mode count: Expected {} but got {}", points.size() - 1, modes.size());
                 return ResponseEntity.badRequest().body(Map.of("error", "For chained route, number of modes must be one less than number of points"));
             }
             Map<String, Object> chainedRoute = graphHopperService.getChainedRoute(points, modes);
+            logger.info("Chained route response: {}", chainedRoute);
             return ResponseEntity.ok(chainedRoute);
         }
 
         String mode = (String) body.getOrDefault("mode", "car");
+        logger.info("Single-mode route requested, mode: {}", mode);
+
         if (mode.equalsIgnoreCase("bus")) {
-            Map<String, Object> busRoute = graphHopperService.getBusRouteWithWalking(points);
-            return ResponseEntity.ok(busRoute);
+            logger.info("Handling bus route with walking fallback");
+            try {
+                Map<String, Object> busRoute = graphHopperService.getBusRouteWithWalking(points);
+                logger.info("Bus route response: {}", busRoute);
+                return ResponseEntity.ok(busRoute);
+            } catch (Exception ex) {
+                logger.error("Error generating bus route", ex);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "Bus route calculation failed", "details", ex.getMessage()));
+            }
         }
 
         GHRequest request = new GHRequest(
                 points.get(0).get(1), points.get(0).get(0),
                 points.get(1).get(1), points.get(1).get(0)
         ).setProfile(mode);
+
+        logger.info("GraphHopper request created: {}", request);
+
         Map<String, Object> routeResult = graphHopperService.getOptimizedRoute(request, mode);
+
+        logger.info("Route result: {}", routeResult);
+
         if (routeResult.containsKey("error")) {
+            logger.warn("Error in route result: {}", routeResult.get("error"));
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(routeResult);
         }
         int actualIterations = (int) routeResult.get("iterations");
         ResponsePath bestPath = (ResponsePath) routeResult.get("bestPath");
         GHResponse response = (GHResponse) routeResult.get("response");
         if (response == null || bestPath == null) {
+            logger.error("Null response or best path in route result");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to generate a valid route"));
         }
         Map<String, Object> formattedResponse = buildFormattedResponse(actualIterations, mode, response, bestPath, routeResult);
+
+        logger.info("Formatted response ready to return");
         return ResponseEntity.ok(formattedResponse);
     }
 
