@@ -110,18 +110,27 @@ public class GraphHopperService {
                     continue;  // Skip header row
                 }
                 String[] parts = line.split(",");
-                if (parts.length < 4) continue;
-                String shapeId = parts[0];
+                logger.debug("Processing line: \"{}\", parts count: {}", line, parts.length);
+
+                if (parts.length < 4) {
+                    logger.warn("Skipping line due to insufficient parts: \"{}\"", line);
+                    continue;
+                }
+                String shapeId = parts[0].trim();
                 double lat, lon;
                 try {
-                    lat = Double.parseDouble(parts[1]);
-                    lon = Double.parseDouble(parts[2]);
+                    // Log the raw string values (enclosed in quotes) so you can see unexpected characters
+                    logger.debug("Parsing lat from \"{}\", lon from \"{}\"", parts[1], parts[2]);
+                    lat = Double.parseDouble(parts[1].trim());
+                    lon = Double.parseDouble(parts[2].trim());
+                    logger.debug("Parsed shapeId: \"{}\" with lat: {} and lon: {}", shapeId, lat, lon);
                 } catch (NumberFormatException e) {
-//                    logger.warn("⚠️ Skipping invalid line in GTFS file: {}", line);
+                    logger.warn("Skipping line due to NumberFormatException: \"{}\"", line);
                     continue;
                 }
                 busRoutes.computeIfAbsent(shapeId, k -> new ArrayList<>()).add(new double[]{lon, lat});
             }
+
             logger.info("🚌 GTFS data loaded successfully! {} bus routes available.", busRoutes.size());
         } catch (Exception e) {
             logger.error("❌ Failed to load GTFS data: {}", e.getMessage());
