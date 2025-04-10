@@ -97,11 +97,13 @@ public class GraphHopperService {
         try {
             logger.info("🔍 Reading GTFS shapes.txt from: {}", shapesFile);
 
-            List<String> lines = Files.readAllLines(Paths.get(shapesFile));
+            List<String> lines = Files.readAllLines(Paths.get(shapesFile), java.nio.charset.StandardCharsets.UTF_8);
 
             logger.info("📄 GTFS file line count: {}", lines.size());
             if (lines.size() > 1) {
-                logger.info("📄 Sample GTFS shape lines:\n{}\n{}", lines.get(1), lines.size() > 2 ? lines.get(2) : "");
+                logger.info("📄 Sample GTFS shape lines:\n{}\n{}",
+                        lines.get(1),
+                        lines.size() > 2 ? lines.get(2) : "");
             }
             boolean isFirstLine = true;
             for (String line : lines) {
@@ -116,13 +118,14 @@ public class GraphHopperService {
                     logger.warn("Skipping line due to insufficient parts: \"{}\"", line);
                     continue;
                 }
-                String shapeId = parts[0].trim();
+                // Remove quotes and trim each value
+                String shapeId = parts[0].replace("\"", "").trim();
                 double lat, lon;
                 try {
-                    // Log the raw string values (enclosed in quotes) so you can see unexpected characters
-                    logger.debug("Parsing lat from \"{}\", lon from \"{}\"", parts[1], parts[2]);
-                    lat = Double.parseDouble(parts[1].trim());
-                    lon = Double.parseDouble(parts[2].trim());
+                    logger.debug("Parsing lat from \"{}\", lon from \"{}\"",
+                            parts[1], parts[2]);
+                    lat = Double.parseDouble(parts[1].replace("\"", "").trim());
+                    lon = Double.parseDouble(parts[2].replace("\"", "").trim());
                     logger.debug("Parsed shapeId: \"{}\" with lat: {} and lon: {}", shapeId, lat, lon);
                 } catch (NumberFormatException e) {
                     logger.warn("Skipping line due to NumberFormatException: \"{}\"", line);
