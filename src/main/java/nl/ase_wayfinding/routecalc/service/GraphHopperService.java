@@ -47,6 +47,7 @@ public class GraphHopperService {
     public GraphHopperService(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
     }
+
     private GraphHopper hopper;
     private final GeometryFactory geometryFactory = new GeometryFactory();
     private Map<String, List<double[]>> busRoutes = new HashMap<>();
@@ -77,8 +78,7 @@ public class GraphHopperService {
                 .setProfiles(
                         new Profile("car").setVehicle("car").setWeighting("custom"),
                         new Profile("bike").setVehicle("bike").setWeighting("custom"),
-                        new Profile("walk").setVehicle("foot").setWeighting("custom")
-                );
+                        new Profile("walk").setVehicle("foot").setWeighting("custom"));
 
         hopper.importOrLoad();
 
@@ -109,7 +109,7 @@ public class GraphHopperService {
             for (String line : lines) {
                 if (isFirstLine) {
                     isFirstLine = false;
-                    continue;  // Skip header row
+                    continue; // Skip header row
                 }
                 String[] parts = line.split(",");
                 logger.debug("Processing line: \"{}\", parts count: {}", line, parts.length);
@@ -131,7 +131,7 @@ public class GraphHopperService {
                     logger.warn("Skipping line due to NumberFormatException: \"{}\"", line);
                     continue;
                 }
-                busRoutes.computeIfAbsent(shapeId, k -> new ArrayList<>()).add(new double[]{lon, lat});
+                busRoutes.computeIfAbsent(shapeId, k -> new ArrayList<>()).add(new double[] { lon, lat });
             }
 
             logger.info("🚌 GTFS data loaded successfully! {} bus routes available.", busRoutes.size());
@@ -175,8 +175,7 @@ public class GraphHopperService {
                         "iterations", currentIteration,
                         "bestPath", response.getBest(),
                         "response", response,
-                        "bad_areas", lastBadAreas.isEmpty() ? List.of() : lastBadAreas
-                );
+                        "bad_areas", lastBadAreas.isEmpty() ? List.of() : lastBadAreas);
             } else {
                 logger.warn("❌ Iteration {}: Found {} bad coords => Creating new 'bad_area_{}' for mode {}",
                         currentIteration, badCoords.size(), currentIteration, mode);
@@ -198,10 +197,8 @@ public class GraphHopperService {
                 "iterations", maxIterations,
                 "bestPath", bestResponse.getBest(),
                 "response", bestResponse,
-                "bad_areas", lastBadAreas.isEmpty() ? List.of() : lastBadAreas
-        );
+                "bad_areas", lastBadAreas.isEmpty() ? List.of() : lastBadAreas);
     }
-
 
     public Map<String, Object> getBusRouteWithWalking(List<List<Double>> userPoints) {
         logger.info("Calculating bus route with walking for userPoints: {}", userPoints);
@@ -263,10 +260,12 @@ public class GraphHopperService {
         response.put("status", "success");
         response.put("mode", "bus");
 
-        Map<String, Object> walkToBusStop = formatPathSegment(walkToBusStopResp.getBest(), "walk", "Origin", "Bus Stop");
+        Map<String, Object> walkToBusStop = formatPathSegment(walkToBusStopResp.getBest(), "walk", "Origin",
+                "Bus Stop");
         Map<String, Object> busSegment = formatBusSegment(
                 busRouteData.get("busRoute").toString(), startBusStop, endBusStop, formattedBusPoints);
-        Map<String, Object> walkFromBusStop = formatPathSegment(walkFromBusStopResp.getBest(), "walk", "Bus Stop", "Destination");
+        Map<String, Object> walkFromBusStop = formatPathSegment(walkFromBusStopResp.getBest(), "walk", "Bus Stop",
+                "Destination");
 
         response.put("paths", List.of(walkToBusStop, busSegment, walkFromBusStop));
         logger.info("Completed bus route with walking successfully.");
@@ -288,7 +287,6 @@ public class GraphHopperService {
         }
         return bestIndex;
     }
-
 
     public Map<String, Object> getBusRoute(List<List<Double>> points) {
         double startLat = points.get(0).get(1);
@@ -336,7 +334,7 @@ public class GraphHopperService {
         return closest;
     }
 
-    private Map<String, Object> formatPathSegment(ResponsePath path, String mode, String startName, String endName) {
+    Map<String, Object> formatPathSegment(ResponsePath path, String mode, String startName, String endName) {
         if (path == null) {
             return Map.of("error", "Failed to calculate path segment");
         }
@@ -348,11 +346,10 @@ public class GraphHopperService {
                 "points", extractCoordinates(path),
                 "instructions", extractInstructions(path),
                 "start", startName,
-                "end", endName
-        );
+                "end", endName);
     }
 
-    private List<Map<String, Object>> extractInstructions(ResponsePath path) {
+    List<Map<String, Object>> extractInstructions(ResponsePath path) {
         List<Map<String, Object>> instructions = new ArrayList<>();
         Translation tr = translationMap.getWithFallBack(Locale.ENGLISH);
         InstructionList instructionList = path.getInstructions();
@@ -377,7 +374,7 @@ public class GraphHopperService {
         return instr;
     }
 
-    private Map<String, Object> formatBusSegment(String busRoute, GHPoint start, GHPoint end, List<List<Double>> busPoints) {
+    Map<String, Object> formatBusSegment(String busRoute, GHPoint start, GHPoint end, List<List<Double>> busPoints) {
         return Map.of(
                 "mode", "bus",
                 "busRoute", busRoute,
@@ -391,17 +388,13 @@ public class GraphHopperService {
                                 "distance", 0,
                                 "time", 0,
                                 "sign", 0,
-                                "location", start
-                        ),
+                                "location", start),
                         Map.of(
                                 "text", "Disembark bus at final stop",
                                 "distance", 0,
                                 "time", 0,
                                 "sign", 4,
-                                "location", end
-                        )
-                )
-        );
+                                "location", end)));
     }
 
     private List<List<Double>> convertBusPoints(List<double[]> busPoints) {
@@ -412,9 +405,10 @@ public class GraphHopperService {
         return coordinates;
     }
 
-    private List<List<Double>> extractCoordinates(ResponsePath path) {
+    List<List<Double>> extractCoordinates(ResponsePath path) {
         List<List<Double>> coords = new ArrayList<>();
-        if (path == null || path.getPoints().isEmpty()) return coords;
+        if (path == null || path.getPoints().isEmpty())
+            return coords;
         PointList points = path.getPoints();
         for (int i = 0; i < points.size(); i++) {
             coords.add(Arrays.asList(points.getLon(i), points.getLat(i)));
@@ -424,7 +418,8 @@ public class GraphHopperService {
 
     private List<List<Double>> identifyBadCoordinates(List<List<Double>> coords) {
         List<List<Double>> badCoords = new ArrayList<>();
-        if (coords.isEmpty()) return badCoords;
+        if (coords.isEmpty())
+            return badCoords;
 
         // Sample every n-th coordinate (adjust samplingInterval as needed)
         int samplingInterval = 5;
@@ -468,10 +463,12 @@ public class GraphHopperService {
                     if (data.get("aqi") instanceof Number) {
                         aqi = ((Number) data.get("aqi")).intValue();
                     }
-                    // If the AQI is greater than 3, mark the corresponding sampled coordinate as bad
+                    // If the AQI is greater than 3, mark the corresponding sampled coordinate as
+                    // bad
                     if (aqi > 3) {
                         badCoords.add(sampledCoords.get(i));
-                        logger.warn("🚫 High AQI detected ({}), marking as bad coordinate: {}", aqi, sampledCoords.get(i));
+                        logger.warn("🚫 High AQI detected ({}), marking as bad coordinate: {}", aqi,
+                                sampledCoords.get(i));
                     }
                 }
             } else {
@@ -511,7 +508,7 @@ public class GraphHopperService {
         logger.info(logMessage.toString());
     }
 
-    private void updateCustomModel(GHRequest request, List<List<Double>> badCoords, int iteration) {
+    void updateCustomModel(GHRequest request, List<List<Double>> badCoords, int iteration) {
         CustomModel cm = request.getCustomModel();
         if (cm == null) {
             cm = new CustomModel();
@@ -534,7 +531,8 @@ public class GraphHopperService {
 
     private void logPolygonCoordinates(Geometry polygon, String areaId) {
         if (polygon instanceof MultiPolygon) {
-            logger.info("📌 **MultiPolygon detected for {} ({}) parts.**", areaId, ((MultiPolygon) polygon).getNumGeometries());
+            logger.info("📌 **MultiPolygon detected for {} ({}) parts.**", areaId,
+                    ((MultiPolygon) polygon).getNumGeometries());
             for (int i = 0; i < ((MultiPolygon) polygon).getNumGeometries(); i++) {
                 logPolygonCoordinates(((MultiPolygon) polygon).getGeometryN(i), areaId + "_part" + i);
             }
@@ -548,7 +546,8 @@ public class GraphHopperService {
     }
 
     private Geometry createAvoidancePolygon(List<List<Double>> badCoords) {
-        if (badCoords.isEmpty()) return null;
+        if (badCoords.isEmpty())
+            return null;
         List<Polygon> polygons = badCoords.stream()
                 .map(coord -> generateHexagon(coord, 100))
                 .collect(Collectors.toList());
@@ -563,8 +562,7 @@ public class GraphHopperService {
             double angleRad = Math.toRadians(60 * i);
             corners[i] = new Coordinate(
                     lon + (radius * Math.cos(angleRad) / 111320d),
-                    lat + (radius * Math.sin(angleRad) / 111320d)
-            );
+                    lat + (radius * Math.sin(angleRad) / 111320d));
         }
         corners[6] = corners[0];
         return geometryFactory.createPolygon(geometryFactory.createLinearRing(corners));
@@ -611,8 +609,7 @@ public class GraphHopperService {
             } else {
                 GHRequest request = new GHRequest(
                         points.get(i).get(1), points.get(i).get(0),
-                        points.get(i + 1).get(1), points.get(i + 1).get(0)
-                ).setProfile(mode);
+                        points.get(i + 1).get(1), points.get(i + 1).get(0)).setProfile(mode);
                 segmentResult = getOptimizedRoute(request, mode);
                 if (segmentResult.containsKey("error")) {
                     return segmentResult;
@@ -635,5 +632,29 @@ public class GraphHopperService {
         chainedResponse.put("total_time", totalTime);
         chainedResponse.put("segments", segments);
         return chainedResponse;
+    }
+
+    /**
+     * Gets a train route with walking segments to/from the train stations.
+     * This is a placeholder implementation for future enhancement.
+     * 
+     * @param userPoints List of points representing start and end locations
+     *                   [[lon1,lat1],[lon2,lat2]]
+     * @return A map containing the train route details or an error
+     */
+    public Map<String, Object> getTrainRouteWithWalking(List<List<Double>> userPoints) {
+        // This is a placeholder implementation for future enhancement
+        // Similar to getBusRouteWithWalking but for train routes
+
+        logger.info("Calculating train route with walking for userPoints: {}", userPoints);
+
+        // Currently not implemented - return a placeholder response
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "success");
+        response.put("mode", "train");
+        response.put("paths", new ArrayList<>());
+        response.put("message", "Train routing is not fully implemented yet");
+
+        return response;
     }
 }
