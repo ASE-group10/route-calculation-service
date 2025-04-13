@@ -640,32 +640,108 @@ public class GraphHopperServiceTest {
 
         @Test
         void testGetTrainRouteWithWalking() {
-                // This is a test stub for future implementation of train routes
-                // For now, we'll just verify the method exists and returns the expected
-                // structure
-
-                // Arrange
+                // Arrange: Create test input points.
                 List<List<Double>> userPoints = Arrays.asList(
-                                Arrays.asList(-0.1278, 51.5074), // Start
-                                Arrays.asList(-0.0343, 51.5258) // End
+                        Arrays.asList(-0.1278, 51.5074), // Start
+                        Arrays.asList(-0.0343, 51.5258)  // End
                 );
 
-                // Since getTrainRouteWithWalking is not yet implemented, we'll just mock it to
-                // return a basic response
-                Map<String, Object> mockTrainResponse = new HashMap<>();
-                mockTrainResponse.put("status", "success");
-                mockTrainResponse.put("mode", "train");
-                mockTrainResponse.put("paths", new ArrayList<>());
-
-                doReturn(mockTrainResponse).when(graphHopperService).getTrainRouteWithWalking(userPoints);
-
-                // Act
+                // Act: Invoke the real getTrainRouteWithWalking method.
                 Map<String, Object> result = graphHopperService.getTrainRouteWithWalking(userPoints);
 
-                // Assert
+                // Assert: Verify the returned structure against the expected values.
                 assertNotNull(result);
                 assertEquals("success", result.get("status"));
                 assertEquals("train", result.get("mode"));
+                assertTrue(result.containsKey("paths"));
+                assertTrue(((List<?>) result.get("paths")).isEmpty());
+                assertEquals("Train routing is not fully implemented yet", result.get("message"));
+        }
+
+        @Test
+        void testIdentifyBadCoordinates_WithGoodAQI() {
+                List<List<Double>> coords = Arrays.asList(
+                        Arrays.asList(-0.1278, 51.5074),
+                        Arrays.asList(-0.0810, 51.5166),
+                        Arrays.asList(-0.0343, 51.5258),
+                        Arrays.asList(-0.0100, 51.5300),
+                        Arrays.asList(-0.0050, 51.5310)
+                );
+
+                // Create an envData response where the AQI is good (e.g., 2)
+                List<Map<String, Object>> envData = new ArrayList<>();
+                envData.add(Map.of("aqi", 2)); // Good AQI
+
+                ResponseEntity<List> responseEntity = new ResponseEntity<>(envData, HttpStatus.OK);
+
+                when(restTemplate.exchange(
+                        anyString(),
+                        any(HttpMethod.class),
+                        any(HttpEntity.class),
+                        eq(List.class)))
+                        .thenReturn(responseEntity);
+
+                @SuppressWarnings("unchecked")
+                List<List<Double>> badCoords = (List<List<Double>>) ReflectionTestUtils.invokeMethod(
+                        graphHopperService, "identifyBadCoordinates", coords);
+
+                // Expect no bad coordinates if the AQI is not above threshold
+                assertTrue(badCoords.isEmpty(), "There should be no bad coordinates when AQI is below threshold");
+        }
+
+        @Test
+        void testIdentifyBadCoordinates_EnvironmentalServiceError() {
+                List<List<Double>> coords = Arrays.asList(
+                        Arrays.asList(-0.1278, 51.5074),
+                        Arrays.asList(-0.0810, 51.5166),
+                        Arrays.asList(-0.0343, 51.5258),
+                        Arrays.asList(-0.0100, 51.5300),
+                        Arrays.asList(-0.0050, 51.5310)
+                );
+
+                // Simulate a response with an error status.
+                ResponseEntity<List> responseEntity = new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
+
+                when(restTemplate.exchange(
+                        anyString(),
+                        any(HttpMethod.class),
+                        any(HttpEntity.class),
+                        eq(List.class)))
+                        .thenReturn(responseEntity);
+
+                @SuppressWarnings("unchecked")
+                List<List<Double>> badCoords = (List<List<Double>>) ReflectionTestUtils.invokeMethod(
+                        graphHopperService, "identifyBadCoordinates", coords);
+
+                // Since the response is not OK, our method should log the error and return an empty list.
+                assertTrue(badCoords.isEmpty(), "Expected no bad coordinates when environmental service call fails");
+        }
+
+        @Test
+        void testIdentifyBadCoordinates_ThrowsException() {
+                List<List<Double>> coords = Arrays.asList(
+                        Arrays.asList(-0.1278, 51.5074),
+                        Arrays.asList(-0.0810, 51.5166),
+                        Arrays.asList(-0.0343, 51.5258),
+                        Arrays.asList(-0.0100, 51.5300),
+                        Arrays.asList(-0.0050, 51.5310)
+                );
+
+                // Configure the restTemplate to throw an exception.
+                when(restTemplate.exchange(
+                        anyString(),
+                        any(HttpMethod.class),
+                        any(HttpEntity.class),
+                        eq(List.class)))
+                        .thenThrow(new RuntimeException("Simulated service failure"));
+
+                // We want to ensure that our method doesn't crash, and instead logs the error and returns an empty list.
+                @SuppressWarnings("unchecked")
+                List<List<Double>> badCoords = (List<List<Double>>) ReflectionTestUtils.invokeMethod(
+                        graphHopperService, "identifyBadCoordinates", coords);
+
+                // Expect an empty list because of the exception.
+                assertTrue(badCoords.isEmpty(), "Expected no bad coordinates when an exception occurs");
         }
 
         @Test
