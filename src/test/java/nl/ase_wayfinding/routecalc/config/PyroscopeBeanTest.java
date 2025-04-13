@@ -8,7 +8,6 @@ import org.mockito.Mockito;
 
 import java.lang.reflect.Field;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -42,13 +41,6 @@ class PyroscopeBeanTest {
 
     private void inject(Object target, String fieldName, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
-    }
-
-    // Helper method to set fields via reflection.
-    private void setField(Object target, String fieldName, Object value) throws Exception {
-        java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
     }
