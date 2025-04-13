@@ -1,0 +1,77 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build, Test, and SonarQube Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Use full history for better analysis
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Verify Java Versions
+        run: |
+          java --version
+          javac --version
+
+      - name: Build Project and Generate Coverage Report
+        run: mvn clean verify jacoco:report
+
+      - name: Debug List Target Directory
+        run: |
+          echo "---- Debug Info: Listing 'target' directory contents ----"
+          ls -la target || echo "No 'target' directory found."
+          echo "---- Debug Info: Listing 'target/site/jacoco' directory contents ----"
+          ls -la target/site/jacoco 2>/dev/null || echo "'target/site/jacoco' directory not found."
+
+      - name: Verify Coverage Report Path
+        run: |
+          echo "---- Checking for 'target/site/jacoco' directory existence ----"
+          if [ ! -d "target/site/jacoco" ] || [ -z "$(ls -A target/site/jacoco)" ]; then
+            echo "ERROR: Coverage report directory 'target/site/jacoco' is missing or empty."
+            exit 1
+          else
+            echo "SUCCESS: Coverage report directory 'target/site/jacoco' exists and has content."
+          fi
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: target/site/jacoco/*
+
+      - name: List Coverage Files
+        run: ls -R target/site/jacoco || echo "No coverage files found."
+
+      - name: Cache SonarQube Packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache Maven Packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Build and SonarQube Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Provided automatically
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=route-calculation-service

@@ -34,9 +34,30 @@ public class RouteController {
     public ResponseEntity<?> calculateRoute(@RequestBody Map<String, Object> body) {
         logger.info("Received route calculation request: {}", body);
         List<List<Double>> points = (List<List<Double>>) body.get("points");
+
+        // Check for null or empty points
+        if (points == null) {
+            logger.warn("Invalid request: No points provided");
+            return ResponseEntity.badRequest().body(Map.of("error", "Points are required"));
+        }
+
         if (points.size() < 2) {
             logger.warn("Invalid request: Less than 2 points");
             return ResponseEntity.badRequest().body(Map.of("error", "At least two points required"));
+        }
+
+        // Validate coordinates
+        try {
+            for (List<Double> point : points) {
+                if (point.size() < 2) {
+                    logger.warn("Invalid request: Point with less than 2 coordinates: {}", point);
+                    return ResponseEntity.badRequest()
+                            .body(Map.of("error", "Each point must have longitude and latitude"));
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Invalid request: Error processing points", e);
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid point format"));
         }
 
         // Check for chained routing (multiple segments)
@@ -45,11 +66,18 @@ public class RouteController {
             logger.info("Chained routing with modes: {}", modes);
             if (modes.size() != points.size() - 1) {
                 logger.warn("Invalid mode count: Expected {} but got {}", points.size() - 1, modes.size());
-                return ResponseEntity.badRequest().body(Map.of("error", "For chained route, number of modes must be one less than number of points"));
+                return ResponseEntity.badRequest().body(
+                        Map.of("error", "For chained route, number of modes must be one less than number of points"));
             }
-            Map<String, Object> chainedRoute = graphHopperService.getChainedRoute(points, modes);
-            logger.info("Chained route response: {}", chainedRoute);
-            return ResponseEntity.ok(chainedRoute);
+            try {
+                Map<String, Object> chainedRoute = graphHopperService.getChainedRoute(points, modes);
+                logger.info("Chained route response: {}", chainedRoute);
+                return ResponseEntity.ok(chainedRoute);
+            } catch (Exception ex) {
+                logger.error("Error calculating chained route", ex);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "Failed to calculate chained route", "details", ex.getMessage()));
+            }
         }
 
         String mode = (String) body.getOrDefault("mode", "car");
@@ -70,8 +98,7 @@ public class RouteController {
 
         GHRequest request = new GHRequest(
                 points.get(0).get(1), points.get(0).get(0),
-                points.get(1).get(1), points.get(1).get(0)
-        ).setProfile(mode);
+                points.get(1).get(1), points.get(1).get(0)).setProfile(mode);
 
         logger.info("GraphHopper request created: {}", request);
 
@@ -91,13 +118,15 @@ public class RouteController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to generate a valid route"));
         }
-        Map<String, Object> formattedResponse = buildFormattedResponse(actualIterations, mode, response, bestPath, routeResult);
+        Map<String, Object> formattedResponse = buildFormattedResponse(actualIterations, mode, response, bestPath,
+                routeResult);
 
         logger.info("Formatted response ready to return");
         return ResponseEntity.ok(formattedResponse);
     }
 
-    private Map<String, Object> buildFormattedResponse(int actualIterations, String mode, GHResponse response, ResponsePath bestPath, Map<String, Object> routeResult) {
+    private Map<String, Object> buildFormattedResponse(int actualIterations, String mode, GHResponse response,
+            ResponsePath bestPath, Map<String, Object> routeResult) {
         Map<String, Object> formattedResponse = new HashMap<>();
         formattedResponse.put("status", "success");
         formattedResponse.put("message", "Optimal route found!");
@@ -105,15 +134,15 @@ public class RouteController {
         formattedResponse.put("mode", mode);
         formattedResponse.put("hints", Map.of(
                 "visited_nodes.sum", response.getHints().getInt("visited_nodes.sum", 0),
-                "visited_nodes.average", response.getHints().getInt("visited_nodes.average", 0)
-        ));
+                "visited_nodes.average", response.getHints().getInt("visited_nodes.average", 0)));
         formattedResponse.put("info", Map.of(
                 "took", bestPath.getTime() / 1000,
-                "roadDataTimestamp", Instant.now().toString()
-        ));
+                "roadDataTimestamp", Instant.now().toString()));
         formattedResponse.put("paths", List.of(buildPathDetails(bestPath, response)));
-        formattedResponse.put("bad_areas", routeResult.get("bad_areas") instanceof List && ((List<?>) routeResult.get("bad_areas")).isEmpty()
-                ? null : routeResult.get("bad_areas"));
+        formattedResponse.put("bad_areas",
+                routeResult.get("bad_areas") instanceof List && ((List<?>) routeResult.get("bad_areas")).isEmpty()
+                        ? null
+                        : routeResult.get("bad_areas"));
         return formattedResponse;
     }
 
@@ -162,8 +191,7 @@ public class RouteController {
                 details.add(Map.of(
                         "value", detail.getValue(),
                         "first", detail.getFirst(),
-                        "last", detail.getLast()
-                ));
+                        "last", detail.getLast()));
             }
         }
         return details;
